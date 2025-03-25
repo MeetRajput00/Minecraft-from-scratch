@@ -46,6 +46,52 @@ void FreeHeightMap() {
     }
     free(heightMap);  // Free main array
 }
+void RenderSky() {
+    glDisable(GL_DEPTH_TEST); // Disable depth test to ensure the skybox is always drawn in the background
+    glDisable(GL_LIGHTING);   // No lighting effects on the skybox
+
+    float skySize = 50.0f; // Size of the skybox
+
+    glBegin(GL_QUADS);
+
+    // Sky color
+    glColor3f(0.5f, 0.7f, 1.0f);
+
+    // Front
+    glVertex3f(-skySize, -skySize, -skySize);
+    glVertex3f( skySize, -skySize, -skySize);
+    glVertex3f( skySize,  skySize, -skySize);
+    glVertex3f(-skySize,  skySize, -skySize);
+
+    // Back
+    glVertex3f(-skySize, -skySize, skySize);
+    glVertex3f( skySize, -skySize, skySize);
+    glVertex3f( skySize,  skySize, skySize);
+    glVertex3f(-skySize,  skySize, skySize);
+
+    // Left
+    glVertex3f(-skySize, -skySize, -skySize);
+    glVertex3f(-skySize, -skySize,  skySize);
+    glVertex3f(-skySize,  skySize,  skySize);
+    glVertex3f(-skySize,  skySize, -skySize);
+
+    // Right
+    glVertex3f(skySize, -skySize, -skySize);
+    glVertex3f(skySize, -skySize,  skySize);
+    glVertex3f(skySize,  skySize,  skySize);
+    glVertex3f(skySize,  skySize, -skySize);
+
+    // Top
+    glVertex3f(-skySize, skySize, -skySize);
+    glVertex3f(skySize, skySize, -skySize);
+    glVertex3f(skySize, skySize,  skySize);
+    glVertex3f(-skySize, skySize,  skySize);
+
+    glEnd();
+
+    glEnable(GL_LIGHTING);  // Re-enable lighting
+    glEnable(GL_DEPTH_TEST); // Re-enable depth test
+}
 
 void RenderWorld()
 {

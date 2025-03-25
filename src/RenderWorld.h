@@ -7,7 +7,7 @@ extern GLuint greenBlockTexture;
 extern float rotateAngle;
 
 void RenderWorld();
-
+void RenderSky();
 void RenderBlock();
 float PerlinNoise(float x, float z);
 void FreeHeightMap();
