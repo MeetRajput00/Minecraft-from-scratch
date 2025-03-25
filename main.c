@@ -25,8 +25,8 @@ void HandleInput();
 HDC hDC;
 HGLRC hRC;
 GLuint greenBlockTexture;
-float rotateAngle=-30.0f;
-float playerX = 0.0f, playerY = 0.0f, playerZ = -5.0f;
+float rotateAngle=0.0f;
+float playerX = 0.0f, playerY = 1.50f, playerZ = -5.0f;
 float playerYaw = 0.0f;  // Player rotation angle (left/right)
 float playerPitch = 0.0f;  // Player pitch (up/down)
 float cameraDistance = 2.0f;  // Distance for third-person view
@@ -53,6 +53,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     ShowWindow(hwnd, nCmdShow);
     InitOpenGL(hwnd);
+    
+    AllocateHeightMap();
+    GenerateHeightMap();
 
     MSG msg = { 0 };
     while (msg.message != WM_QUIT)
@@ -67,7 +70,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             SwapBuffers(hDC);
         }
     }
-
+    FreeHeightMap();
     CleanupOpenGL();
     return 0;
 }
@@ -171,15 +174,15 @@ void CleanupOpenGL()
 void HandleInput() {
     float moveSpeed = 0.1f;  // Movement speed
     float strafeSpeed = 0.1f;  // Strafing speed
-
+    float rotateSpeed=0.3f;
     // Move forward/backward along Z-axis (Q and W keys)
-    if (GetAsyncKeyState('W')) { 
+    if (GetAsyncKeyState(VK_UP)) { 
         // Move forward in the direction the camera is facing
         playerX += cos(playerYaw) * moveSpeed;
         playerZ += sin(playerYaw) * moveSpeed;
     }
     
-    if (GetAsyncKeyState('Q')) { 
+    if (GetAsyncKeyState(VK_DOWN)) { 
         // Move backward in the opposite direction
         playerX -= cos(playerYaw) * moveSpeed;
         playerZ -= sin(playerYaw) * moveSpeed;
@@ -195,11 +198,19 @@ void HandleInput() {
         playerZ += sin(playerYaw + M_PI_2) * strafeSpeed;
     }
     
-    if (GetAsyncKeyState(VK_UP)){ 
-        playerY += 0.1f;
+    // if (GetAsyncKeyState(VK_UP)){ 
+    //     playerY += 0.1f;
+    // }
+    // if (GetAsyncKeyState(VK_DOWN)){
+    //     playerY -= 0.1f;
+    // }
+
+     // Rotate player left/right (E and R keys)
+     if (GetAsyncKeyState('R')) { // Turn right (clockwise)
+        playerYaw += rotateSpeed;
     }
-    if (GetAsyncKeyState(VK_DOWN)){
-        playerY -= 0.1f;
+    if (GetAsyncKeyState('E')) { // Turn left (counterclockwise)
+        playerYaw -= rotateSpeed;
     }
 }
 

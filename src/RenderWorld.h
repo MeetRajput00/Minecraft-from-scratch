@@ -8,4 +8,9 @@ extern float rotateAngle;
 
 void RenderWorld();
 
+void RenderBlock();
+float PerlinNoise(float x, float z);
+void FreeHeightMap();
+void GenerateHeightMap();
+void AllocateHeightMap();
 #endif
