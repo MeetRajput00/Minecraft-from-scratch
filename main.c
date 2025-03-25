@@ -1,10 +1,17 @@
 #include <windows.h>
 #include <GL/gl.h>
 #include <GL/glu.h>
+#include <math.h>
+#include <stdio.h>
+
+#define M_PI_2 1.5707963267948966  // π/2 (90 degrees)
+
+#include "src/RenderWorld.h"
+#include "src/RenderPlayer.h"
+
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "include/src/stb_image.h"
-
+#include "include/stb_image.h"
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 void InitOpenGL(HWND hwnd);
@@ -12,12 +19,17 @@ void Render();
 GLuint LoadTexture(const char* filename);
 void Resize(int width, int height);
 void CleanupOpenGL();
+void HandleInput();
 
 // OpenGL rendering context
 HDC hDC;
 HGLRC hRC;
 GLuint greenBlockTexture;
 float rotateAngle=-30.0f;
+float playerX = 0.0f, playerY = 0.0f, playerZ = -5.0f;
+float playerYaw = 0.0f;  // Player rotation angle (left/right)
+float playerPitch = 0.0f;  // Player pitch (up/down)
+float cameraDistance = 2.0f;  // Distance for third-person view
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
@@ -52,7 +64,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
         }
         else
         {
-            Render();
             SwapBuffers(hDC);
         }
     }
@@ -84,53 +95,30 @@ void InitOpenGL(HWND hwnd)
     glMatrixMode(GL_MODELVIEW);
 }
 
-void Render()
-{
+void Render() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glLoadIdentity();
-    glTranslatef(0.0f, 0.0f, -5.0f);
-    glBindTexture(GL_TEXTURE_2D, greenBlockTexture); // Bind the Minecraft-style texture
 
-    glRotatef(rotateAngle,1.0f,1.0f,0.0f);
-    glBegin(GL_QUADS);
+    // Calculate the camera direction (based on yaw & pitch)
+    float lookX = cos(playerYaw) * cos(playerPitch);
+    float lookY = sin(playerPitch);
+    float lookZ = sin(playerYaw) * cos(playerPitch);
 
-    // Front Face
-    glTexCoord2f(0.0f, 0.0f); glVertex3f(-1.0f, -1.0f,  1.0f);
-    glTexCoord2f(1.0f, 0.0f); glVertex3f( 1.0f, -1.0f,  1.0f);
-    glTexCoord2f(1.0f, 1.0f); glVertex3f( 1.0f,  1.0f,  1.0f);
-    glTexCoord2f(0.0f, 1.0f); glVertex3f(-1.0f,  1.0f,  1.0f);
+    // Compute the camera position for a third-person view
+    float camX = playerX - lookX * cameraDistance;
+    float camY = playerY - lookY * cameraDistance;
+    float camZ = playerZ - lookZ * cameraDistance;
 
-    // Back Face
-    glTexCoord2f(0.0f, 0.0f); glVertex3f(-1.0f, -1.0f, -1.0f);
-    glTexCoord2f(1.0f, 0.0f); glVertex3f( 1.0f, -1.0f, -1.0f);
-    glTexCoord2f(1.0f, 1.0f); glVertex3f( 1.0f,  1.0f, -1.0f);
-    glTexCoord2f(0.0f, 1.0f); glVertex3f(-1.0f,  1.0f, -1.0f);
+    // Attach the camera to the player
+    gluLookAt(
+        camX, camY, camZ,  // Camera position (eye)
+        playerX, playerY, playerZ,  // Look at player position
+        0.0f, 1.0f, 0.0f   // Up vector
+    );
 
-    // Left Face
-    glTexCoord2f(0.0f, 0.0f); glVertex3f(-1.0f, -1.0f, -1.0f);
-    glTexCoord2f(1.0f, 0.0f); glVertex3f(-1.0f, -1.0f,  1.0f);
-    glTexCoord2f(1.0f, 1.0f); glVertex3f(-1.0f,  1.0f,  1.0f);
-    glTexCoord2f(0.0f, 1.0f); glVertex3f(-1.0f,  1.0f, -1.0f);
-
-    // Right Face
-    glTexCoord2f(0.0f, 0.0f); glVertex3f(1.0f, -1.0f, -1.0f);
-    glTexCoord2f(1.0f, 0.0f); glVertex3f(1.0f, -1.0f,  1.0f);
-    glTexCoord2f(1.0f, 1.0f); glVertex3f(1.0f,  1.0f,  1.0f);
-    glTexCoord2f(0.0f, 1.0f); glVertex3f(1.0f,  1.0f, -1.0f);
-
-    // Top Face (grass texture)
-    glTexCoord2f(0.0f, 0.0f); glVertex3f(-1.0f,  1.0f, -1.0f);
-    glTexCoord2f(1.0f, 0.0f); glVertex3f( 1.0f,  1.0f, -1.0f);
-    glTexCoord2f(1.0f, 1.0f); glVertex3f( 1.0f,  1.0f,  1.0f);
-    glTexCoord2f(0.0f, 1.0f); glVertex3f(-1.0f,  1.0f,  1.0f);
-
-    // Bottom Face (dirt texture)
-    glTexCoord2f(0.0f, 0.0f); glVertex3f(-1.0f, -1.0f, -1.0f);
-    glTexCoord2f(1.0f, 0.0f); glVertex3f( 1.0f, -1.0f, -1.0f);
-    glTexCoord2f(1.0f, 1.0f); glVertex3f( 1.0f, -1.0f,  1.0f);
-    glTexCoord2f(0.0f, 1.0f); glVertex3f(-1.0f, -1.0f,  1.0f);
-
-    glEnd();
+    // Render the world
+    RenderWorld();
+    RenderPlayer();
 }
 
 GLuint LoadTexture(const char* filename) {
@@ -180,22 +168,61 @@ void CleanupOpenGL()
     ReleaseDC(GetActiveWindow(), hDC);
 }
 
+void HandleInput() {
+    float moveSpeed = 0.1f;  // Movement speed
+    float strafeSpeed = 0.1f;  // Strafing speed
+
+    // Move forward/backward along Z-axis (Q and W keys)
+    if (GetAsyncKeyState('W')) { 
+        // Move forward in the direction the camera is facing
+        playerX += cos(playerYaw) * moveSpeed;
+        playerZ += sin(playerYaw) * moveSpeed;
+    }
+    
+    if (GetAsyncKeyState('Q')) { 
+        // Move backward in the opposite direction
+        playerX -= cos(playerYaw) * moveSpeed;
+        playerZ -= sin(playerYaw) * moveSpeed;
+    }
+
+    // Move left/right relative to player's yaw (A and D keys)
+    if (GetAsyncKeyState(VK_LEFT)) {  // Move left
+        playerX -= cos(playerYaw + M_PI_2) * strafeSpeed;
+        playerZ -= sin(playerYaw + M_PI_2) * strafeSpeed;
+    }
+    if (GetAsyncKeyState(VK_RIGHT)) { // Move right
+        playerX += cos(playerYaw + M_PI_2) * strafeSpeed;
+        playerZ += sin(playerYaw + M_PI_2) * strafeSpeed;
+    }
+    
+    if (GetAsyncKeyState(VK_UP)){ 
+        playerY += 0.1f;
+    }
+    if (GetAsyncKeyState(VK_DOWN)){
+        playerY -= 0.1f;
+    }
+}
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     switch (uMsg)
     {
-    case WM_SIZE:
-        Resize(LOWORD(lParam), HIWORD(lParam));
-        return 0;
+        case WM_SIZE:
+            Resize(LOWORD(lParam), HIWORD(lParam));
+            return 0;
 
-    case WM_PAINT:
-        Render();
-        SwapBuffers(hDC);
-        return 0;
+        case WM_PAINT:
+            Render();
+            SwapBuffers(hDC);
+            return 0;
 
-    case WM_DESTROY:
-        PostQuitMessage(0);
-        return 0;
+        case WM_KEYDOWN:
+            HandleInput();
+            break;
+
+        case WM_DESTROY:
+            PostQuitMessage(0);
+            return 0;
     }
 
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
