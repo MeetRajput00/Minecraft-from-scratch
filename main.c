@@ -20,6 +20,7 @@ void CleanupOpenGL();
 // OpenGL rendering context
 HDC hDC;
 HGLRC hRC;
+HWND hwnd;
 GLuint greenBlockTexture;
 float rotateAngle=0.0f;
 float playerX = 0.0f, playerY = 1.50f, playerZ = -5.0f;
@@ -40,7 +41,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     RegisterClass(&wc);
 
-    HWND hwnd = CreateWindowEx(
+    hwnd = CreateWindowEx(
         0, CLASS_NAME, "OpenGL Green Cube", WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT, 800, 600,
         NULL, NULL, hInstance, NULL);
@@ -157,6 +158,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
         case WM_PAINT:
             Render();
+            FollowCursor();
             // UpdateSun();
             SwapBuffers(hDC);
             return 0;

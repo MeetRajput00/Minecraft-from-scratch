@@ -1,14 +1,19 @@
 #include <Windows.h>
 #include <math.h>
 #include "PlayerInput.h"
-
+#include <stdio.h>
 
 #define M_PI_2 1.5707963267948966  // π/2 (90 degrees)
+
+
+POINT lastMousePos;
+boolean firstMouse = TRUE;
 
 void HandleInput() {
     float moveSpeed = 0.1f;  // Movement speed
     float strafeSpeed = 0.1f;  // Strafing speed
     float rotateSpeed=0.3f;
+
     // Move forward/backward along Z-axis (Q and W keys)
     if (GetAsyncKeyState(VK_UP)) { 
         // Move forward in the direction the camera is facing
@@ -31,19 +36,49 @@ void HandleInput() {
         playerX += cos(playerYaw + M_PI_2) * strafeSpeed;
         playerZ += sin(playerYaw + M_PI_2) * strafeSpeed;
     }
-    
-    // if (GetAsyncKeyState(VK_UP)){ 
-    //     playerY += 0.1f;
-    // }
-    // if (GetAsyncKeyState(VK_DOWN)){
-    //     playerY -= 0.1f;
-    // }
+}
 
-     // Rotate player left/right (E and R keys)
-     if (GetAsyncKeyState('R')) { // Turn right (clockwise)
-        playerYaw += rotateSpeed;
+void FollowCursor(){
+    float rotateSpeed = 0.002f; // Adjust sensitivity
+    float pitchLimit = 0.506f; // Limit vertical rotation (avoid flipping)
+
+    // Get current mouse position
+    POINT mousePos;
+    GetCursorPos(&mousePos);
+
+    // Get window center
+    RECT rect;
+    GetWindowRect(hwnd, &rect);
+
+    // Check if mouse is inside the window
+    if (mousePos.x < rect.left || mousePos.x > rect.right ||
+        mousePos.y < rect.top  || mousePos.y > rect.bottom) {
+        firstMouse = TRUE; // Reset tracking when mouse leaves window
+        return;
     }
-    if (GetAsyncKeyState('E')) { // Turn left (counterclockwise)
-        playerYaw -= rotateSpeed;
+    int windowWidth = rect.right - rect.left;
+    int windowHeight = rect.bottom - rect.top;
+    POINT center = { windowWidth / 2, windowHeight / 2 };
+    ClientToScreen(hwnd, &center); // Convert to screen coordinates
+
+    // If first frame, initialize lastMousePos
+    if (firstMouse) {
+        SetCursorPos(center.x, center.y);
+        lastMousePos = mousePos;
+        firstMouse = FALSE;
     }
+
+    // Calculate mouse movement delta
+    float deltaX = (mousePos.x - lastMousePos.x) * rotateSpeed;
+    float deltaY = (mousePos.y - lastMousePos.y) * rotateSpeed;
+
+    // Update rotation based on delta
+    playerYaw += deltaX;        // Rotate left/right
+    playerPitch -= deltaY;      // Rotate up/down (invert Y for natural feel)
+    // Clamp pitch to avoid flipping
+    if (playerPitch > pitchLimit) playerPitch = pitchLimit;
+    if (playerPitch < -pitchLimit) playerPitch = -pitchLimit;
+
+    // Store last position
+    lastMousePos = mousePos;
 }

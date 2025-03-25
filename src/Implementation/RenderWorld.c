@@ -9,7 +9,7 @@
 #include "RenderWorld.h"
 
 // Define grid size
-#define GRID_SIZE 5  
+#define GRID_SIZE 100  
 
 // Create height map as a dynamically allocated 2D array
 float** heightMap;
