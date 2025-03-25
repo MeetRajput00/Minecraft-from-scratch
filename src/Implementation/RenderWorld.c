@@ -1,10 +1,12 @@
+#include <windows.h>
+#include <stdlib.h>  // For malloc, free
+#include <stdio.h>   // For printf (debugging)
 #include <math.h>   // For sin, cos, floor
 #include <stdlib.h> // For rand()
 #include <time.h>   // For time()
 #include <gl/GL.h>
+
 #include "RenderWorld.h"
-#include <stdlib.h>  // For malloc, free
-#include <stdio.h>   // For printf (debugging)
 
 // Define grid size
 #define GRID_SIZE 5  

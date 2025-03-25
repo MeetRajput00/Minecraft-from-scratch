@@ -1,7 +1,8 @@
 #ifndef RENDER_WORLD_H
 #define RENDER_WORLD_H
 
-#include <GL/gl.h>  // Ensure OpenGL types are recognized
+#include <windows.h>
+#include <gl/GL.h>
 
 extern GLuint greenBlockTexture;
 extern float rotateAngle;
