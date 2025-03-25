@@ -12,6 +12,7 @@ add_executable(OpenGLWin32
     main.c 
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Implementation/RenderPlayer.c 
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Implementation/RenderWorld.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Implementation/RenderSun.c
 )
 
 # Include directories (for OpenGL and headers)

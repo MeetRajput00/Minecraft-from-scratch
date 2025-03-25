@@ -8,7 +8,7 @@
 
 #include "src/RenderWorld.h"
 #include "src/RenderPlayer.h"
-
+#include "src/RenderSun.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "include/stb_image.h"
@@ -20,6 +20,9 @@ GLuint LoadTexture(const char* filename);
 void Resize(int width, int height);
 void CleanupOpenGL();
 void HandleInput();
+void SetupLighting();
+void SetupSunLighting();
+void SetupMaterial();
 
 // OpenGL rendering context
 HDC hDC;
@@ -30,6 +33,7 @@ float playerX = 0.0f, playerY = 1.50f, playerZ = -5.0f;
 float playerYaw = 0.0f;  // Player rotation angle (left/right)
 float playerPitch = 0.0f;  // Player pitch (up/down)
 float cameraDistance = 2.0f;  // Distance for third-person view
+float sunRotateAngle =1.0f;
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
@@ -56,6 +60,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     
     AllocateHeightMap();
     GenerateHeightMap();
+    SetupLighting();
+    SetupSunLighting();
+    SetupMaterial();
 
     MSG msg = { 0 };
     while (msg.message != WM_QUIT)
@@ -73,6 +80,46 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     FreeHeightMap();
     CleanupOpenGL();
     return 0;
+}
+void SetupLighting() {
+    glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0); // Main light source
+
+    // Ambient light (soft, global light to brighten the scene)
+    float ambientLight[] = { 0.3f, 0.3f, 0.3f, 1.0f }; 
+    glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambientLight);
+
+    // Sunlight settings (diffuse and specular)
+    float lightColor[] = { 1.0f, 0.9f, 0.6f, 1.0f }; 
+    float lightPos[] = { 0.0f, 30.0f, 0.0f, 1.0f }; // High above
+
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, lightColor);
+    glLightfv(GL_LIGHT0, GL_SPECULAR, lightColor);
+    glLightfv(GL_LIGHT0, GL_POSITION, lightPos);
+
+    glEnable(GL_COLOR_MATERIAL); // Allows glColor to affect objects
+}
+void SetupSunLighting() {
+    glEnable(GL_LIGHT1); 
+
+    float sunlightDiffuse[] = { 1.2f, 1.1f, 0.9f, 1.0f };  // Increase brightness
+    glLightfv(GL_LIGHT1, GL_DIFFUSE, sunlightDiffuse);
+
+    float sunlightSpecular[] = { 1.2f, 1.1f, 0.9f, 1.0f }; // More reflection
+    glLightfv(GL_LIGHT1, GL_SPECULAR, sunlightSpecular);
+
+    float sunlightDirection[] = { 0.0f, -1.0f, -0.5f, 0.0f }; // Directional light
+    glLightfv(GL_LIGHT1, GL_POSITION, sunlightDirection);
+}
+
+void SetupMaterial() {
+    float materialDiffuse[] = { 1.0f, 1.0f, 1.0f, 1.0f };  // Reflects light well
+    float materialSpecular[] = { 0.9f, 0.9f, 0.9f, 1.0f }; // Enhances brightness
+    float materialShininess = 50.0f;  // Higher value = shinier surfaces
+
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, materialDiffuse);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, materialSpecular);
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, materialShininess);
 }
 
 void InitOpenGL(HWND hwnd)
@@ -120,8 +167,10 @@ void Render() {
     );
 
     // Render the world
+    RenderSky();
+    RenderSun(sunRotateAngle);
     RenderWorld();
-    RenderPlayer();
+    //RenderPlayer();
 }
 
 GLuint LoadTexture(const char* filename) {
@@ -224,6 +273,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
         case WM_PAINT:
             Render();
+            // UpdateSun();
             SwapBuffers(hDC);
             return 0;
 
