@@ -4,25 +4,18 @@
 #include <math.h>
 #include <stdio.h>
 
-#define M_PI_2 1.5707963267948966  // π/2 (90 degrees)
-
 #include "src/RenderWorld.h"
 #include "src/RenderPlayer.h"
 #include "src/RenderSun.h"
-
-#define STB_IMAGE_IMPLEMENTATION
-#include "include/stb_image.h"
+#include "src/Lightning.h"
+#include "src/Texture.h"
+#include "src/PlayerInput.h"
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 void InitOpenGL(HWND hwnd);
 void Render();
-GLuint LoadTexture(const char* filename);
 void Resize(int width, int height);
 void CleanupOpenGL();
-void HandleInput();
-void SetupLighting();
-void SetupSunLighting();
-void SetupMaterial();
 
 // OpenGL rendering context
 HDC hDC;
@@ -81,46 +74,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     CleanupOpenGL();
     return 0;
 }
-void SetupLighting() {
-    glEnable(GL_LIGHTING);
-    glEnable(GL_LIGHT0); // Main light source
-
-    // Ambient light (soft, global light to brighten the scene)
-    float ambientLight[] = { 0.3f, 0.3f, 0.3f, 1.0f }; 
-    glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambientLight);
-
-    // Sunlight settings (diffuse and specular)
-    float lightColor[] = { 1.0f, 0.9f, 0.6f, 1.0f }; 
-    float lightPos[] = { 0.0f, 30.0f, 0.0f, 1.0f }; // High above
-
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, lightColor);
-    glLightfv(GL_LIGHT0, GL_SPECULAR, lightColor);
-    glLightfv(GL_LIGHT0, GL_POSITION, lightPos);
-
-    glEnable(GL_COLOR_MATERIAL); // Allows glColor to affect objects
-}
-void SetupSunLighting() {
-    glEnable(GL_LIGHT1); 
-
-    float sunlightDiffuse[] = { 1.2f, 1.1f, 0.9f, 1.0f };  // Increase brightness
-    glLightfv(GL_LIGHT1, GL_DIFFUSE, sunlightDiffuse);
-
-    float sunlightSpecular[] = { 1.2f, 1.1f, 0.9f, 1.0f }; // More reflection
-    glLightfv(GL_LIGHT1, GL_SPECULAR, sunlightSpecular);
-
-    float sunlightDirection[] = { 0.0f, -1.0f, -0.5f, 0.0f }; // Directional light
-    glLightfv(GL_LIGHT1, GL_POSITION, sunlightDirection);
-}
-
-void SetupMaterial() {
-    float materialDiffuse[] = { 1.0f, 1.0f, 1.0f, 1.0f };  // Reflects light well
-    float materialSpecular[] = { 0.9f, 0.9f, 0.9f, 1.0f }; // Enhances brightness
-    float materialShininess = 50.0f;  // Higher value = shinier surfaces
-
-    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, materialDiffuse);
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, materialSpecular);
-    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, materialShininess);
-}
 
 void InitOpenGL(HWND hwnd)
 {
@@ -173,35 +126,7 @@ void Render() {
     //RenderPlayer();
 }
 
-GLuint LoadTexture(const char* filename) {
-    GLuint textureID;
-    int width, height, numChannels;
-    
-    // Load image file
-    unsigned char* data = stbi_load(filename, &width, &height, &numChannels, 0);
-    if (!data) {
-        printf("Failed to load texture: %s\n", filename);
-        return 0;
-    }
 
-    glGenTextures(1, &textureID);        // Generate texture ID
-    glBindTexture(GL_TEXTURE_2D, textureID);  // Bind it
-
-    // Determine image format
-    GLenum format = (numChannels == 4) ? GL_RGBA : GL_RGB;
-
-    // Upload texture to GPU
-    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-    
-    // Set texture parameters (repeat and filter)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    stbi_image_free(data);  // Free image memory
-    return textureID;       // Return texture ID
-}
 
 void Resize(int width, int height)
 {
@@ -220,48 +145,7 @@ void CleanupOpenGL()
     ReleaseDC(GetActiveWindow(), hDC);
 }
 
-void HandleInput() {
-    float moveSpeed = 0.1f;  // Movement speed
-    float strafeSpeed = 0.1f;  // Strafing speed
-    float rotateSpeed=0.3f;
-    // Move forward/backward along Z-axis (Q and W keys)
-    if (GetAsyncKeyState(VK_UP)) { 
-        // Move forward in the direction the camera is facing
-        playerX += cos(playerYaw) * moveSpeed;
-        playerZ += sin(playerYaw) * moveSpeed;
-    }
-    
-    if (GetAsyncKeyState(VK_DOWN)) { 
-        // Move backward in the opposite direction
-        playerX -= cos(playerYaw) * moveSpeed;
-        playerZ -= sin(playerYaw) * moveSpeed;
-    }
 
-    // Move left/right relative to player's yaw (A and D keys)
-    if (GetAsyncKeyState(VK_LEFT)) {  // Move left
-        playerX -= cos(playerYaw + M_PI_2) * strafeSpeed;
-        playerZ -= sin(playerYaw + M_PI_2) * strafeSpeed;
-    }
-    if (GetAsyncKeyState(VK_RIGHT)) { // Move right
-        playerX += cos(playerYaw + M_PI_2) * strafeSpeed;
-        playerZ += sin(playerYaw + M_PI_2) * strafeSpeed;
-    }
-    
-    // if (GetAsyncKeyState(VK_UP)){ 
-    //     playerY += 0.1f;
-    // }
-    // if (GetAsyncKeyState(VK_DOWN)){
-    //     playerY -= 0.1f;
-    // }
-
-     // Rotate player left/right (E and R keys)
-     if (GetAsyncKeyState('R')) { // Turn right (clockwise)
-        playerYaw += rotateSpeed;
-    }
-    if (GetAsyncKeyState('E')) { // Turn left (counterclockwise)
-        playerYaw -= rotateSpeed;
-    }
-}
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
