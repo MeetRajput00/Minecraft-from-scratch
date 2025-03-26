@@ -17,7 +17,11 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: MINGW64
-          install: mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-make
+          install: > 
+            mingw-w64-x86_64-gcc 
+            mingw-w64-x86_64-cmake 
+            mingw-w64-x86_64-make 
+            mingw-w64-x86_64-runtime  # Ensures runtime DLLs like libwinpthread-1.dll are installed
 
       - name: Configure CMake
         run: cmake -B build -G "MinGW Makefiles"
@@ -25,10 +29,17 @@ jobs:
       - name: Build project
         run: cmake --build build --config Release
 
-      # Copy necessary DLLs to the build folder
+      # Dynamically find and copy libwinpthread-1.dll
       - name: Copy required DLLs
+        shell: pwsh
         run: |
-          cp C:/msys64/mingw64/bin/libwinpthread-1.dll build/
+          $DLLPath = Get-ChildItem -Path "C:/msys64/mingw64/bin/" -Filter "libwinpthread-1.dll" -Recurse | Select-Object -ExpandProperty FullName -First 1
+          if ($DLLPath) {
+            Copy-Item -Path $DLLPath -Destination build/
+          } else {
+            Write-Error "libwinpthread-1.dll not found!"
+            exit 1
+          }
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -52,7 +63,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest  # Always updates the 'latest' release
+          tag_name: latest
           files: |
             build/OpenGLWin32.exe
             build/libwinpthread-1.dll
