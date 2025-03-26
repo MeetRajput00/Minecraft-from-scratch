@@ -12,29 +12,36 @@ boolean firstMouse = TRUE;
 void HandleInput() {
     float moveSpeed = 0.1f;  // Movement speed
     float strafeSpeed = 0.1f;  // Strafing speed
-    float rotateSpeed=0.3f;
+    float rotateSpeed=0.2f;
 
     // Move forward/backward along Z-axis (Q and W keys)
-    if (GetAsyncKeyState(VK_UP)) { 
+    if (GetAsyncKeyState(VK_UP)||GetAsyncKeyState('W')) { 
         // Move forward in the direction the camera is facing
         playerX += cos(playerYaw) * moveSpeed;
         playerZ += sin(playerYaw) * moveSpeed;
     }
     
-    if (GetAsyncKeyState(VK_DOWN)) { 
+    if (GetAsyncKeyState(VK_DOWN)||GetAsyncKeyState('S')) { 
         // Move backward in the opposite direction
         playerX -= cos(playerYaw) * moveSpeed;
         playerZ -= sin(playerYaw) * moveSpeed;
     }
 
     // Move left/right relative to player's yaw (A and D keys)
-    if (GetAsyncKeyState(VK_LEFT)) {  // Move left
+    if (GetAsyncKeyState(VK_LEFT)||GetAsyncKeyState('A')) {  // Move left
         playerX -= cos(playerYaw + M_PI_2) * strafeSpeed;
         playerZ -= sin(playerYaw + M_PI_2) * strafeSpeed;
     }
-    if (GetAsyncKeyState(VK_RIGHT)) { // Move right
+    if (GetAsyncKeyState(VK_RIGHT)||GetAsyncKeyState('D')) { // Move right
         playerX += cos(playerYaw + M_PI_2) * strafeSpeed;
         playerZ += sin(playerYaw + M_PI_2) * strafeSpeed;
+    }
+
+    if (GetAsyncKeyState('Q')) { // Move right
+        playerYaw-=rotateSpeed;
+    }
+    if (GetAsyncKeyState('E')) { // Move right
+        playerYaw+=rotateSpeed;
     }
 }
 
