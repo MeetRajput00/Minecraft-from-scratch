@@ -4,6 +4,6 @@
 #include <windows.h>
 #include <GL/gl.h>
 
-GLuint LoadTexture(const char* filename);
+GLuint LoadTexture(const char *filename);
 
 #endif
