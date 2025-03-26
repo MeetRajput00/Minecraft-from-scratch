@@ -3,7 +3,7 @@ name: Build and Release
 on:
   push:
     branches:
-      - main
+      - main  # Runs on every push to the main branch
 
 jobs:
   build:
@@ -21,7 +21,7 @@ jobs:
             mingw-w64-x86_64-gcc 
             mingw-w64-x86_64-cmake 
             mingw-w64-x86_64-make 
-            mingw-w64-x86_64-runtime
+            mingw-w64-x86_64-pthreads  
 
       - name: Configure CMake
         run: cmake -B build -G "MinGW Makefiles"
@@ -29,7 +29,7 @@ jobs:
       - name: Build project
         run: cmake --build build --config Release
 
-      # Dynamically find and copy libwinpthread-1.dll
+      # ✅ Dynamically find and copy libwinpthread-1.dll
       - name: Copy required DLLs
         shell: pwsh
         run: |
