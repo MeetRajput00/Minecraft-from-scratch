@@ -1,16 +1,18 @@
 #ifndef RENDER_WORLD_H
 #define RENDER_WORLD_H
 
-#include <GL/gl.h>  // Ensure OpenGL types are recognized
+#include <windows.h>
+#include <gl/GL.h>
+#include "Transform.h"
 
 extern GLuint greenBlockTexture;
 extern float rotateAngle;
 
 void RenderWorld();
 void RenderSky();
-void RenderBlock();
 float PerlinNoise(float x, float z);
 void FreeHeightMap();
 void GenerateHeightMap();
 void AllocateHeightMap();
+void RenderRectangle3D(const Rectangle3D *rect);
 #endif

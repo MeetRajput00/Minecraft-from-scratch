@@ -4,50 +4,52 @@
 #include <math.h>
 #include <stdio.h>
 
-#define M_PI_2 1.5707963267948966  // π/2 (90 degrees)
-
 #include "src/RenderWorld.h"
 #include "src/RenderPlayer.h"
 #include "src/RenderSun.h"
-
-#define STB_IMAGE_IMPLEMENTATION
-#include "include/stb_image.h"
+#include "src/Lightning.h"
+#include "src/Texture.h"
+#include "src/PlayerInput.h"
+#include "src/FrustumCulling.h"
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 void InitOpenGL(HWND hwnd);
 void Render();
-GLuint LoadTexture(const char* filename);
 void Resize(int width, int height);
 void CleanupOpenGL();
-void HandleInput();
-void SetupLighting();
-void SetupSunLighting();
-void SetupMaterial();
-
+void UpdatePhysics(float deltaTime);
 // OpenGL rendering context
 HDC hDC;
 HGLRC hRC;
+HWND hwnd;
 GLuint greenBlockTexture;
-float rotateAngle=0.0f;
-float playerX = 0.0f, playerY = 1.50f, playerZ = -5.0f;
-float playerYaw = 0.0f;  // Player rotation angle (left/right)
-float playerPitch = 0.0f;  // Player pitch (up/down)
-float cameraDistance = 2.0f;  // Distance for third-person view
-float sunRotateAngle =1.0f;
+float rotateAngle = 0.0f;
+float playerX = 0.0f, playerY = 3.50f, playerZ = -5.0f;
+float playerYaw = 0.0f;   // Player rotation angle (left/right)
+float playerPitch = 0.0f; // Player pitch (up/down)
+
+float playerVelocityY = 0.0f; // Vertical velocity
+float gravity = -9.8f;        // Gravity strength
+float groundY = 3.50f;        // Ground height (modify for terrain)
+float jumpStrength = 5.0f;    // Jumping force
+int isOnGround = 0;           // 1 if player is on the ground
+
+float cameraDistance = 2.0f; // Distance for third-person view
+float sunRotateAngle = 1.0f;
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
     const char CLASS_NAME[] = "OpenGLWindow";
 
-    WNDCLASS wc = { 0 };
+    WNDCLASS wc = {0};
     wc.lpfnWndProc = WindowProc;
     wc.hInstance = hInstance;
     wc.lpszClassName = CLASS_NAME;
-    wc.style = CS_OWNDC;  // Allows OpenGL to use a private device context
+    wc.style = CS_OWNDC; // Allows OpenGL to use a private device context
 
     RegisterClass(&wc);
 
-    HWND hwnd = CreateWindowEx(
+    hwnd = CreateWindowEx(
         0, CLASS_NAME, "OpenGL Green Cube", WS_OVERLAPPEDWINDOW,
         CW_USEDEFAULT, CW_USEDEFAULT, 800, 600,
         NULL, NULL, hInstance, NULL);
@@ -57,14 +59,20 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
     ShowWindow(hwnd, nCmdShow);
     InitOpenGL(hwnd);
-    
+
     AllocateHeightMap();
     GenerateHeightMap();
     SetupLighting();
     SetupSunLighting();
     SetupMaterial();
 
-    MSG msg = { 0 };
+    const float TARGET_FPS = 60.0f;
+    const float FRAME_TIME = 1.0f / TARGET_FPS; // ~16.67ms per frame
+    LARGE_INTEGER freq, lastTime, currentTime;
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&lastTime);
+
+    MSG msg = {0};
     while (msg.message != WM_QUIT)
     {
         if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
@@ -72,8 +80,19 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
-        else
+        // Measure elapsed time
+        QueryPerformanceCounter(&currentTime);
+        float deltaTime = (float)(currentTime.QuadPart - lastTime.QuadPart) / freq.QuadPart;
+
+        if (deltaTime >= FRAME_TIME)
         {
+            lastTime = currentTime; // Reset timer
+
+            // Update & Render
+            UpdatePhysics(deltaTime);
+            HandleInput();
+            FollowCursor();
+            Render();
             SwapBuffers(hDC);
         }
     }
@@ -81,55 +100,31 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     CleanupOpenGL();
     return 0;
 }
-void SetupLighting() {
-    glEnable(GL_LIGHTING);
-    glEnable(GL_LIGHT0); // Main light source
+void UpdatePhysics(float deltaTime)
+{
+    // Apply gravity if not on ground
+    if (!isOnGround)
+    {
+        playerVelocityY += gravity * deltaTime;
+        playerY += playerVelocityY * deltaTime;
+    }
 
-    // Ambient light (soft, global light to brighten the scene)
-    float ambientLight[] = { 0.3f, 0.3f, 0.3f, 1.0f }; 
-    glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambientLight);
-
-    // Sunlight settings (diffuse and specular)
-    float lightColor[] = { 1.0f, 0.9f, 0.6f, 1.0f }; 
-    float lightPos[] = { 0.0f, 30.0f, 0.0f, 1.0f }; // High above
-
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, lightColor);
-    glLightfv(GL_LIGHT0, GL_SPECULAR, lightColor);
-    glLightfv(GL_LIGHT0, GL_POSITION, lightPos);
-
-    glEnable(GL_COLOR_MATERIAL); // Allows glColor to affect objects
+    // Collision with ground
+    if (playerY <= groundY)
+    {
+        playerY = groundY; // Snap to ground
+        playerVelocityY = 0.0f;
+        isOnGround = 1;
+    }
 }
-void SetupSunLighting() {
-    glEnable(GL_LIGHT1); 
-
-    float sunlightDiffuse[] = { 1.2f, 1.1f, 0.9f, 1.0f };  // Increase brightness
-    glLightfv(GL_LIGHT1, GL_DIFFUSE, sunlightDiffuse);
-
-    float sunlightSpecular[] = { 1.2f, 1.1f, 0.9f, 1.0f }; // More reflection
-    glLightfv(GL_LIGHT1, GL_SPECULAR, sunlightSpecular);
-
-    float sunlightDirection[] = { 0.0f, -1.0f, -0.5f, 0.0f }; // Directional light
-    glLightfv(GL_LIGHT1, GL_POSITION, sunlightDirection);
-}
-
-void SetupMaterial() {
-    float materialDiffuse[] = { 1.0f, 1.0f, 1.0f, 1.0f };  // Reflects light well
-    float materialSpecular[] = { 0.9f, 0.9f, 0.9f, 1.0f }; // Enhances brightness
-    float materialShininess = 50.0f;  // Higher value = shinier surfaces
-
-    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, materialDiffuse);
-    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, materialSpecular);
-    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, materialShininess);
-}
-
 void InitOpenGL(HWND hwnd)
 {
     hDC = GetDC(hwnd);
 
-    PIXELFORMATDESCRIPTOR pfd = { sizeof(PIXELFORMATDESCRIPTOR), 1,
-        PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
-        PFD_TYPE_RGBA, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        24, 8, 0, PFD_MAIN_PLANE, 0, 0, 0, 0 };
+    PIXELFORMATDESCRIPTOR pfd = {sizeof(PIXELFORMATDESCRIPTOR), 1,
+                                 PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
+                                 PFD_TYPE_RGBA, 32, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                                 24, 8, 0, PFD_MAIN_PLANE, 0, 0, 0, 0};
 
     int pixelFormat = ChoosePixelFormat(hDC, &pfd);
     SetPixelFormat(hDC, pixelFormat, &pfd);
@@ -145,7 +140,8 @@ void InitOpenGL(HWND hwnd)
     glMatrixMode(GL_MODELVIEW);
 }
 
-void Render() {
+void Render()
+{
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glLoadIdentity();
 
@@ -161,51 +157,23 @@ void Render() {
 
     // Attach the camera to the player
     gluLookAt(
-        camX, camY, camZ,  // Camera position (eye)
-        playerX, playerY, playerZ,  // Look at player position
-        0.0f, 1.0f, 0.0f   // Up vector
+        camX, camY, camZ,          // Camera position (eye)
+        playerX, playerY, playerZ, // Look at player position
+        0.0f, 1.0f, 0.0f           // Up vector
     );
 
-    // Render the world
+    // ExtractFrustum();
+    //  Render the world
     RenderSky();
     RenderSun(sunRotateAngle);
     RenderWorld();
-    //RenderPlayer();
-}
-
-GLuint LoadTexture(const char* filename) {
-    GLuint textureID;
-    int width, height, numChannels;
-    
-    // Load image file
-    unsigned char* data = stbi_load(filename, &width, &height, &numChannels, 0);
-    if (!data) {
-        printf("Failed to load texture: %s\n", filename);
-        return 0;
-    }
-
-    glGenTextures(1, &textureID);        // Generate texture ID
-    glBindTexture(GL_TEXTURE_2D, textureID);  // Bind it
-
-    // Determine image format
-    GLenum format = (numChannels == 4) ? GL_RGBA : GL_RGB;
-
-    // Upload texture to GPU
-    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-    
-    // Set texture parameters (repeat and filter)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    stbi_image_free(data);  // Free image memory
-    return textureID;       // Return texture ID
+    // RenderPlayer();
 }
 
 void Resize(int width, int height)
 {
-    if (height == 0) height = 1;
+    if (height == 0)
+        height = 1;
     glViewport(0, 0, width, height);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
@@ -220,70 +188,24 @@ void CleanupOpenGL()
     ReleaseDC(GetActiveWindow(), hDC);
 }
 
-void HandleInput() {
-    float moveSpeed = 0.1f;  // Movement speed
-    float strafeSpeed = 0.1f;  // Strafing speed
-    float rotateSpeed=0.3f;
-    // Move forward/backward along Z-axis (Q and W keys)
-    if (GetAsyncKeyState(VK_UP)) { 
-        // Move forward in the direction the camera is facing
-        playerX += cos(playerYaw) * moveSpeed;
-        playerZ += sin(playerYaw) * moveSpeed;
-    }
-    
-    if (GetAsyncKeyState(VK_DOWN)) { 
-        // Move backward in the opposite direction
-        playerX -= cos(playerYaw) * moveSpeed;
-        playerZ -= sin(playerYaw) * moveSpeed;
-    }
-
-    // Move left/right relative to player's yaw (A and D keys)
-    if (GetAsyncKeyState(VK_LEFT)) {  // Move left
-        playerX -= cos(playerYaw + M_PI_2) * strafeSpeed;
-        playerZ -= sin(playerYaw + M_PI_2) * strafeSpeed;
-    }
-    if (GetAsyncKeyState(VK_RIGHT)) { // Move right
-        playerX += cos(playerYaw + M_PI_2) * strafeSpeed;
-        playerZ += sin(playerYaw + M_PI_2) * strafeSpeed;
-    }
-    
-    // if (GetAsyncKeyState(VK_UP)){ 
-    //     playerY += 0.1f;
-    // }
-    // if (GetAsyncKeyState(VK_DOWN)){
-    //     playerY -= 0.1f;
-    // }
-
-     // Rotate player left/right (E and R keys)
-     if (GetAsyncKeyState('R')) { // Turn right (clockwise)
-        playerYaw += rotateSpeed;
-    }
-    if (GetAsyncKeyState('E')) { // Turn left (counterclockwise)
-        playerYaw -= rotateSpeed;
-    }
-}
-
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     switch (uMsg)
     {
-        case WM_SIZE:
-            Resize(LOWORD(lParam), HIWORD(lParam));
-            return 0;
+    case WM_SIZE:
+        Resize(LOWORD(lParam), HIWORD(lParam));
+        return 0;
 
-        case WM_PAINT:
-            Render();
-            // UpdateSun();
-            SwapBuffers(hDC);
-            return 0;
+    case WM_PAINT:
+        return 0;
 
-        case WM_KEYDOWN:
-            HandleInput();
-            break;
+    case WM_KEYDOWN:
+        HandleInput();
+        break;
 
-        case WM_DESTROY:
-            PostQuitMessage(0);
-            return 0;
+    case WM_DESTROY:
+        PostQuitMessage(0);
+        return 0;
     }
 
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
