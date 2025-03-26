@@ -16,6 +16,8 @@ add_executable(OpenGLWin32
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Implementation/Texture.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Implementation/Lightning.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Implementation/PlayerInput.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Implementation/FrustumCulling.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/Implementation/Transform.c
 )
 
 # Include directories (for OpenGL and headers)
