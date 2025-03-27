@@ -10,11 +10,7 @@
 #include "Transform.h"
 #include "FrustumCulling.h"
 
-// Define grid size
-#define GRID_SIZE 100
-
-// Create height map as a dynamically allocated 2D array
-float **heightMap;
+GLuint blockDisplayList = 0;
 
 // Function to allocate memory for height map
 void AllocateHeightMap()
@@ -22,26 +18,98 @@ void AllocateHeightMap()
     int size = GRID_SIZE * 2 + 1; // Total grid dimensions
 
     // Allocate array of pointers (rows)
-    heightMap = (float **)malloc(size * sizeof(float *));
+    worldMap = (Rectangle3D **)malloc(size * sizeof(Rectangle3D *));
 
     // Allocate each row
     for (int i = 0; i < size; i++)
     {
-        heightMap[i] = (float *)malloc(size * sizeof(float));
+        worldMap[i] = (Rectangle3D *)malloc(size * sizeof(Rectangle3D));
     }
 }
 
-// Function to generate the terrain heights using Perlin Noise
-void GenerateHeightMap()
-{
-    float noiseScale = 0.2f; // Controls terrain roughness
-    float maxHeight = 3.0f;  // Maximum height variation
+// Add these helper functions for improved Perlin noise
+float Fade(float t) {
+    return t * t * t * (t * (t * 6 - 15) + 10);
+}
 
-    for (int x = -GRID_SIZE; x <= GRID_SIZE; x++)
-    {
-        for (int z = -GRID_SIZE; z <= GRID_SIZE; z++)
-        {
-            heightMap[x + GRID_SIZE][z + GRID_SIZE] = PerlinNoise(x * noiseScale, z * noiseScale) * maxHeight;
+float Lerp(float a, float b, float t) {
+    return a + t * (b - a);
+}
+
+float Grad(int hash, float x, float y) {
+    int h = hash & 15;
+    float grad = 1.0f + (h & 7);
+    if (h & 8) grad = -grad;
+    return (h & 1 ? x : y) * grad;
+}
+
+// Replace the existing PerlinNoise function with this improved version
+float PerlinNoise(float x, float y) {
+    const int p[512] = { 
+        // ... your permutation table here (256 values repeated twice)
+        151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,190,6,148,
+        247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,
+        // ... repeat the above values ...
+        151,160,137,91,90,15,131,13,201,95,96,53,194,233,7,225,140,36,103,30,69,142,8,99,37,240,21,10,23,190,6,148,
+        247,120,234,75,0,26,197,62,94,252,219,203,117,35,11,32,57,177,33,88,237,149,56,87,174,20,125,136,171,168,68,175,
+    };
+
+    int X = (int)floor(x) & 255;
+    int Y = (int)floor(y) & 255;
+    x -= floor(x);
+    y -= floor(y);
+    
+    float u = Fade(x);
+    float v = Fade(y);
+    
+    int A = p[X] + Y;
+    int B = p[X + 1] + Y;
+    
+    return Lerp(
+        Lerp(Grad(p[A], x, y), Grad(p[B], x - 1, y), u),
+        Lerp(Grad(p[A + 1], x, y - 1), Grad(p[B + 1], x - 1, y - 1), u),
+        v
+    ) * 0.5f + 0.5f;
+}
+
+// Update the GenerateHeightMap function
+void GenerateHeightMap() {
+    float noiseScale = 0.05f;    // Make this smaller for larger features
+    float heightScale = 10.0f;   // Increase for more dramatic height differences
+    float persistence = 0.5f;    // Controls how much each octave contributes
+    int octaves = 4;            // Number of layers of noise
+    
+    for (int x = -GRID_SIZE; x <= GRID_SIZE; x++) {
+        for (int z = -GRID_SIZE; z <= GRID_SIZE; z++) {
+            float amplitude = 1.0f;
+            float frequency = 1.0f;
+            float height = 0.0f;
+            float maxValue = 0.0f;
+            
+            // Combine multiple octaves of noise
+            for (int o = 0; o < octaves; o++) {
+                float sampleX = x * noiseScale * frequency;
+                float sampleZ = z * noiseScale * frequency;
+                
+                height += PerlinNoise(sampleX, sampleZ) * amplitude;
+                maxValue += amplitude;
+                
+                amplitude *= persistence;
+                frequency *= 2.0f;
+            }
+            
+            // Normalize and scale the height
+            height = (height / maxValue) * heightScale;
+            
+            // Create the block with the calculated height
+            Rectangle3D worldBlock = {
+                {x * 1.0f, height, z * 1.0f}, // Position
+                5.0f,   // width
+                height,   // height (will be scaled in render)
+                5.0f    // depth
+            };
+            
+            worldMap[x + GRID_SIZE][z + GRID_SIZE] = worldBlock;
         }
     }
 }
@@ -53,9 +121,9 @@ void FreeHeightMap()
 
     for (int i = 0; i < size; i++)
     {
-        free(heightMap[i]); // Free each row
+        free(worldMap[i]); // Free each row
     }
-    free(heightMap); // Free main array
+    free(worldMap); // Free main array
 }
 void RenderSky()
 {
@@ -104,118 +172,87 @@ void RenderSky()
     glEnable(GL_LIGHTING);   // Re-enable lighting
     glEnable(GL_DEPTH_TEST); // Re-enable depth test
 }
+void InitBlockDisplayList() {
+    blockDisplayList = glGenLists(1);
+    glNewList(blockDisplayList, GL_COMPILE);
+    
+    glBegin(GL_QUADS);
+    // Front
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-0.5f, -0.5f,  0.5f);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f( 0.5f, -0.5f,  0.5f);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f( 0.5f,  0.5f,  0.5f);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-0.5f,  0.5f,  0.5f);
+    // Back
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-0.5f, -0.5f, -0.5f);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(-0.5f,  0.5f, -0.5f);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f( 0.5f,  0.5f, -0.5f);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f( 0.5f, -0.5f, -0.5f);
+    // Top
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-0.5f,  0.5f, -0.5f);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(-0.5f,  0.5f,  0.5f);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f( 0.5f,  0.5f,  0.5f);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f( 0.5f,  0.5f, -0.5f);
+    // Bottom
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-0.5f, -0.5f, -0.5f);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f( 0.5f, -0.5f, -0.5f);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f( 0.5f, -0.5f,  0.5f);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-0.5f, -0.5f,  0.5f);
+    // Right
+    glTexCoord2f(0.0f, 0.0f); glVertex3f( 0.5f, -0.5f, -0.5f);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f( 0.5f,  0.5f, -0.5f);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f( 0.5f,  0.5f,  0.5f);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f( 0.5f, -0.5f,  0.5f);
+    // Left
+    glTexCoord2f(0.0f, 0.0f); glVertex3f(-0.5f, -0.5f, -0.5f);
+    glTexCoord2f(1.0f, 0.0f); glVertex3f(-0.5f, -0.5f,  0.5f);
+    glTexCoord2f(1.0f, 1.0f); glVertex3f(-0.5f,  0.5f,  0.5f);
+    glTexCoord2f(0.0f, 1.0f); glVertex3f(-0.5f,  0.5f, -0.5f);
+    glEnd();
+    
+    glEndList();
+}
 
-void RenderWorld()
-{
-    glTranslatef(0.0f, 0.0f, -10.0f); // Move the world back
+void RenderWorld() {
+    if (blockDisplayList == 0) {
+        InitBlockDisplayList();
+    }
+
+    glEnable(GL_TEXTURE_2D);
     glBindTexture(GL_TEXTURE_2D, greenBlockTexture);
-    float spacing = 2.2f; // Spacing between blocks
-    Rectangle3D block = {{0.0f, 0.0f, 0.0f}, 2.0f, 3.0f, 1.5f};
-    for (int x = -GRID_SIZE; x <= GRID_SIZE; x++)
-    {
-        for (int z = -GRID_SIZE; z <= GRID_SIZE; z++)
-        {
-            float height = heightMap[x + GRID_SIZE][z + GRID_SIZE]; // Use precomputed height
-            // float rotationOffset = (rand() % 10) - 5; // Slight random rotation variation
-            //  Compute the block's world position
-            Rectangle3D worldBlock = {
-                {x * spacing, height, z * spacing}, // Position in world space
-                block.width,
-                block.height,
-                block.depth};
 
-            // Perform frustum culling
-            if (!IsInFrustumRectangle(&worldBlock))
-            {
-                continue; // Skip rendering if block is outside the view frustum
+    const float spacing = 1.0f;
+    const int renderDistance = 40; // Reduce render distance for better performance
+
+    // Get player chunk position
+    int playerChunkX = (int)playerX;
+    int playerChunkZ = (int)playerZ;
+
+    for (int x = -renderDistance; x <= renderDistance; x++) {
+        for (int z = -renderDistance; z <= renderDistance; z++) {
+            int worldX = x + playerChunkX + GRID_SIZE;
+            int worldZ = z + playerChunkZ + GRID_SIZE;
+
+            if (worldX < 0 || worldX >= GRID_SIZE * 2 || worldZ < 0 || worldZ >= GRID_SIZE * 2) {
+                continue;
             }
+
+            Rectangle3D* block = &worldMap[worldX][worldZ];
+            
+            // Simple distance-based culling
+            float dx = block->pos.x - playerX;
+            float dz = block->pos.z - playerZ;
+            if (dx * dx + dz * dz > renderDistance * renderDistance) {
+                continue;
+            }
+
             glPushMatrix();
-            glTranslatef(x * spacing, height, z * spacing); // Position each block with varied height
-            glRotatef(rotateAngle, 1.0f, 1.0f, 0.0f);
-
-            glBegin(GL_QUADS);
-            RenderRectangle3D(&block);
-            glEnd();
-
+            glTranslatef(block->pos.x, 0, block->pos.z);
+            // Scale the height based on the terrain height
+            glScalef(block->width, block->height, block->depth);
+            glCallList(blockDisplayList);
             glPopMatrix();
         }
     }
-}
-// Simple Perlin Noise function (based on gradient noise)
-float PerlinNoise(float x, float z)
-{
-    int n = (int)x + (int)z * 57;
-    n = (n << 13) ^ n;
-    float noise = (1.0f - ((n * (n * n * 15731 + 789221) + 1376312589) & 0x7fffffff) / 1073741824.0f);
-    return noise;
-}
 
-void RenderRectangle3D(const Rectangle3D *rect)
-{
-    float x = rect->pos.x;
-    float y = rect->pos.y;
-    float z = rect->pos.z;
-    float w = rect->width;
-    float h = rect->height;
-    float d = rect->depth;
-
-    // Front Face
-    glTexCoord2f(0.0f, 0.0f);
-    glVertex3f(x, y, z + d);
-    glTexCoord2f(1.0f, 0.0f);
-    glVertex3f(x + w, y, z + d);
-    glTexCoord2f(1.0f, 1.0f);
-    glVertex3f(x + w, y + h, z + d);
-    glTexCoord2f(0.0f, 1.0f);
-    glVertex3f(x, y + h, z + d);
-
-    // Back Face
-    glTexCoord2f(0.0f, 0.0f);
-    glVertex3f(x, y, z);
-    glTexCoord2f(1.0f, 0.0f);
-    glVertex3f(x + w, y, z);
-    glTexCoord2f(1.0f, 1.0f);
-    glVertex3f(x + w, y + h, z);
-    glTexCoord2f(0.0f, 1.0f);
-    glVertex3f(x, y + h, z);
-
-    // Left Face
-    glTexCoord2f(0.0f, 0.0f);
-    glVertex3f(x, y, z);
-    glTexCoord2f(1.0f, 0.0f);
-    glVertex3f(x, y, z + d);
-    glTexCoord2f(1.0f, 1.0f);
-    glVertex3f(x, y + h, z + d);
-    glTexCoord2f(0.0f, 1.0f);
-    glVertex3f(x, y + h, z);
-
-    // Right Face
-    glTexCoord2f(0.0f, 0.0f);
-    glVertex3f(x + w, y, z);
-    glTexCoord2f(1.0f, 0.0f);
-    glVertex3f(x + w, y, z + d);
-    glTexCoord2f(1.0f, 1.0f);
-    glVertex3f(x + w, y + h, z + d);
-    glTexCoord2f(0.0f, 1.0f);
-    glVertex3f(x + w, y + h, z);
-
-    // Top Face
-    glTexCoord2f(0.0f, 0.0f);
-    glVertex3f(x, y + h, z);
-    glTexCoord2f(1.0f, 0.0f);
-    glVertex3f(x + w, y + h, z);
-    glTexCoord2f(1.0f, 1.0f);
-    glVertex3f(x + w, y + h, z + d);
-    glTexCoord2f(0.0f, 1.0f);
-    glVertex3f(x, y + h, z + d);
-
-    // Bottom Face
-    glTexCoord2f(0.0f, 0.0f);
-    glVertex3f(x, y, z);
-    glTexCoord2f(1.0f, 0.0f);
-    glVertex3f(x + w, y, z);
-    glTexCoord2f(1.0f, 1.0f);
-    glVertex3f(x + w, y, z + d);
-    glTexCoord2f(0.0f, 1.0f);
-    glVertex3f(x, y, z + d);
+    glDisable(GL_TEXTURE_2D);
 }

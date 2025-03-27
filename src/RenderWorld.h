@@ -8,6 +8,13 @@
 extern GLuint greenBlockTexture;
 extern float rotateAngle;
 
+// Define grid size
+#define GRID_SIZE 100
+
+// Create height map as a dynamically allocated 2D array
+extern Rectangle3D **worldMap;
+extern float playerX,playerZ;
+
 void RenderWorld();
 void RenderSky();
 float PerlinNoise(float x, float z);

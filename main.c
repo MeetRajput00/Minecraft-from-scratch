@@ -11,6 +11,8 @@
 #include "src/Texture.h"
 #include "src/PlayerInput.h"
 #include "src/FrustumCulling.h"
+#include "src/Transform.h"
+
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 void InitOpenGL(HWND hwnd);
@@ -24,7 +26,7 @@ HGLRC hRC;
 HWND hwnd;
 GLuint greenBlockTexture;
 float rotateAngle = 0.0f;
-float playerX = 0.0f, playerY = 3.50f, playerZ = -5.0f;
+float playerX = 0.0f, playerY = 10.0f, playerZ = -5.0f;
 float playerYaw = 0.0f;   // Player rotation angle (left/right)
 float playerPitch = 0.0f; // Player pitch (up/down)
 
@@ -36,6 +38,12 @@ int isOnGround = 0;           // 1 if player is on the ground
 
 float cameraDistance = 2.0f; // Distance for third-person view
 float sunRotateAngle = 1.0f;
+
+// Define grid size
+#define GRID_SIZE 100
+
+// Create height map as a dynamically allocated 2D array
+Rectangle3D **worldMap;
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
@@ -100,23 +108,52 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     CleanupOpenGL();
     return 0;
 }
+
+float CheckCollision(float x, float y, float z) {
+    // Check collision with terrain using the height map
+    int mapX = (int)(x + GRID_SIZE/2);
+    int mapZ = (int)(z + GRID_SIZE/2);
+    
+    // Ensure we're within bounds
+    if (mapX >= 0 && mapX < GRID_SIZE && mapZ >= 0 && mapZ < GRID_SIZE) {
+        return worldMap[mapZ][mapX].height;
+    }
+    return groundY; // Default ground height if out of bounds
+}
+
 void UpdatePhysics(float deltaTime)
 {
     // Apply gravity if not on ground
     if (!isOnGround)
     {
-        playerVelocityY += gravity * deltaTime;
-        playerY += playerVelocityY * deltaTime;
+        playerVelocityY += gravity*deltaTime;
+        float nextY = playerY + playerVelocityY * deltaTime;
+        
+        // Get the height of the terrain at player's position
+        float terrainHeight = CheckCollision(playerX, nextY, playerZ);
+        // Check for collision
+        if (nextY <= terrainHeight)
+        {
+            playerY = terrainHeight;
+            playerVelocityY = 0.0f;
+            isOnGround = 1;
+        }
+        else
+        {
+            playerY = nextY;
+        }
     }
-
-    // Collision with ground
-    if (playerY <= groundY)
+    else
     {
-        playerY = groundY; // Snap to ground
-        playerVelocityY = 0.0f;
-        isOnGround = 1;
+        // Check if we're still on ground
+        float terrainHeight = CheckCollision(playerX, playerY, playerZ);
+        if (playerY > terrainHeight + 0.1f) // Small threshold to prevent floating point issues
+        {
+            isOnGround = 0;
+        }
     }
 }
+
 void InitOpenGL(HWND hwnd)
 {
     hDC = GetDC(hwnd);
